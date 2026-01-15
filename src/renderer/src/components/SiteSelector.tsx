@@ -1,5 +1,6 @@
 import { AVAILABLE_SITES } from '@renderer/constants/sites'
 import { SiteConfig } from '../types'
+import { UpdateModal } from './Modals/UpdateModal'
 
 export const SiteSelector = ({
   onSelect,
@@ -67,6 +68,7 @@ export const SiteSelector = ({
           <span className="group-hover:animate-bounce">🚀</span>
         </button>
       </div>
+      <UpdateModal />
     </div>
   )
 }
