@@ -1,0 +1,27 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*' # O robô só trabalha quando você envia uma tag começando com 'v' (ex: v1.0.1)
+
+jobs:
+  build:
+    runs-on: windows-latest # Vamos compilar para Windows
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build and Publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }} # Usa o segredo que criamos
+        run: npm run publish:win

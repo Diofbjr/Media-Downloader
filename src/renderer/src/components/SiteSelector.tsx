@@ -1,7 +1,13 @@
 import { AVAILABLE_SITES } from '@renderer/constants/sites'
 import { SiteConfig } from '../types'
 
-export const SiteSelector = ({ onSelect }: { onSelect: (site: SiteConfig) => void }) => {
+export const SiteSelector = ({
+  onSelect,
+  onOpenChangelog,
+}: {
+  onSelect: (site: SiteConfig) => void
+  onOpenChangelog: () => void
+}) => {
   return (
     /* h-screen trava a altura na tela. overflow-y-auto ativa a rolagem se os cards passarem dessa altura. */
     <div className="h-screen w-full bg-[#0a0c0f] flex flex-col items-center bg-[radial-gradient(circle_at_top,var(--tw-gradient-stops))] from-blue-900/20 via-[#0a0c0f] to-[#0a0c0f] overflow-y-auto custom-scrollbar">
@@ -49,9 +55,21 @@ export const SiteSelector = ({ onSelect }: { onSelect: (site: SiteConfig) => voi
         ))}
       </div>
 
-      {/* Footer - mb-12 garante que ele não fique colado no fim da página após a rolagem */}
-      <div className="mt-auto mb-12 text-[10px] font-bold text-gray-600 tracking-widest uppercase shrink-0">
-        V 1.0 • Sistema de Favoritos Ativado
+      {/* Footer com Botão de Changelog */}
+      <div className="mt-auto mb-12 flex flex-col items-center gap-4 shrink-0">
+        <button
+          onClick={onOpenChangelog}
+          className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-full transition-all group"
+        >
+          <span className="text-[10px] font-black text-blue-500 tracking-widest uppercase">
+            Novidades
+          </span>
+          <span className="group-hover:animate-bounce">🚀</span>
+        </button>
+
+        <div className="text-[10px] font-bold text-gray-600 tracking-widest uppercase">
+          V 1.2 • Sistema de Favoritos Ativado
+        </div>
       </div>
     </div>
   )

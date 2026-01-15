@@ -7,8 +7,9 @@ import axios from 'axios'
 import fs from 'fs'
 import path from 'path'
 
-// Configuração de logs simples para o updater (opcional)
+// Configuração do updater
 autoUpdater.logger = console
+autoUpdater.autoDownload = false // Permitimos que o usuário inicie o download via Modal
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -24,24 +25,24 @@ function createWindow(): void {
     },
   })
 
-  // --- LÓGICA DE ATUALIZAÇÃO AUTOMÁTICA ---
-  autoUpdater.autoDownload = true
+  // --- LÓGICA DE ATUALIZAÇÃO AUTOMÁTICA (Main para Renderer) ---
 
-  autoUpdater.on('update-available', () => {
-    mainWindow.webContents.send('update-message', 'Uma nova versão está disponível. Baixando...')
+  autoUpdater.on('update-available', (info) => {
+    mainWindow.webContents.send('update_available', info)
+  })
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    mainWindow.webContents.send('download_progress', progressObj.percent)
   })
 
   autoUpdater.on('update-downloaded', () => {
-    mainWindow.webContents.send('update-downloaded')
+    mainWindow.webContents.send('update_downloaded')
   })
 
   autoUpdater.on('error', (err) => {
-    mainWindow.webContents.send(
-      'update-message',
-      'Erro ao atualizar: ' + (err.message || 'Erro desconhecido'),
-    )
+    console.error('Erro no AutoUpdater:', err)
   })
-  // ---------------------------------------
+  // -------------------------------------------------------------
 
   Menu.setApplicationMenu(null)
 
@@ -95,8 +96,8 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
-    // Verifica atualizações ao abrir (apenas em produção)
-    if (!is.dev) {
+    // Inicia busca por atualizações em produção
+    if (app.isPackaged) {
       autoUpdater.checkForUpdatesAndNotify()
     }
   })
@@ -115,14 +116,20 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
+
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // Handler para reiniciar e instalar atualização
-  ipcMain.on('restart-app', () => {
+  // --- HANDLERS DE ATUALIZAÇÃO (IPC) ---
+  ipcMain.on('start_download', () => {
+    autoUpdater.downloadUpdate()
+  })
+
+  ipcMain.on('restart_app', () => {
     autoUpdater.quitAndInstall()
   })
+  // -------------------------------------
 
   ipcMain.handle('dialog:openDirectory', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
