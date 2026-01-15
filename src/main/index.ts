@@ -9,7 +9,9 @@ import path from 'path'
 
 // Configuração do updater
 autoUpdater.logger = console
-autoUpdater.autoDownload = false // Permitimos que o usuário inicie o download via Modal
+autoUpdater.autoDownload = false
+// Permite baixar versões beta se você marcar como "Pre-release" no GitHub
+autoUpdater.allowPrerelease = true
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -25,10 +27,19 @@ function createWindow(): void {
     },
   })
 
-  // --- LÓGICA DE ATUALIZAÇÃO AUTOMÁTICA (Main para Renderer) ---
+  // --- LÓGICA DE ATUALIZAÇÃO ---
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('Checando por atualizações...')
+  })
 
   autoUpdater.on('update-available', (info) => {
+    console.log('Update disponível:', info.version)
     mainWindow.webContents.send('update_available', info)
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('Nenhuma atualização encontrada.')
   })
 
   autoUpdater.on('download-progress', (progressObj) => {
@@ -41,8 +52,11 @@ function createWindow(): void {
 
   autoUpdater.on('error', (err) => {
     console.error('Erro no AutoUpdater:', err)
+    // Exibe o erro na tela para sabermos o que aconteceu (Apenas para teste)
+    // mainWindow.webContents.send('update_error', err.message)
   })
-  // -------------------------------------------------------------
+
+  // -----------------------------
 
   Menu.setApplicationMenu(null)
 
@@ -56,7 +70,7 @@ function createWindow(): void {
     expirationDate: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
   })
 
-  // 2. Bypass de CORS e CSP (Total)
+  // 2. Bypass de CORS e CSP
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = { ...details.responseHeaders }
     delete responseHeaders['content-security-policy']
@@ -70,7 +84,7 @@ function createWindow(): void {
     callback({ cancel: false, responseHeaders })
   })
 
-  // 3. Referer Dinâmico e User-Agent
+  // 3. Referer Dinâmico
   session.defaultSession.webRequest.onBeforeSendHeaders(
     { urls: ['*://*/*'] },
     (details, callback) => {
@@ -96,7 +110,8 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
-    // Inicia busca por atualizações em produção
+
+    // Inicia busca por atualizações
     if (app.isPackaged) {
       autoUpdater.checkForUpdatesAndNotify()
     }
@@ -115,13 +130,13 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.electron')
+  // AJUSTE: Use o mesmo ID do seu package.json
+  electronApp.setAppUserModelId('com.diofbjr.mediadownloader')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // --- HANDLERS DE ATUALIZAÇÃO (IPC) ---
   ipcMain.on('start_download', () => {
     autoUpdater.downloadUpdate()
   })
@@ -129,7 +144,6 @@ app.whenReady().then(() => {
   ipcMain.on('restart_app', () => {
     autoUpdater.quitAndInstall()
   })
-  // -------------------------------------
 
   ipcMain.handle('dialog:openDirectory', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -174,6 +188,7 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
