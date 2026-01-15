@@ -66,10 +66,6 @@ export const SiteSelector = ({
           </span>
           <span className="group-hover:animate-bounce">🚀</span>
         </button>
-
-        <div className="text-[10px] font-bold text-gray-600 tracking-widest uppercase">
-          V 1.2 • Sistema de Favoritos Ativado
-        </div>
       </div>
     </div>
   )
