@@ -9,12 +9,13 @@ import path from 'path'
 
 // Configuração do updater
 autoUpdater.logger = console
-autoUpdater.autoDownload = false
-// Permite baixar versões beta se você marcar como "Pre-release" no GitHub
+autoUpdater.autoDownload = false // Manter false para o usuário controlar o clique
 autoUpdater.allowPrerelease = true
 
+let mainWindow: BrowserWindow
+
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1100,
     height: 750,
     show: false,
@@ -23,23 +24,23 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      webSecurity: false,
+      webSecurity: false, // Necessário para carregar imagens de domínios externos via fetch
     },
   })
 
-  // --- LÓGICA DE ATUALIZAÇÃO ---
+  // --- LÓGICA DE ATUALIZAÇÃO (Auto-Updater) ---
 
   autoUpdater.on('checking-for-update', () => {
-    console.log('Checando por atualizações...')
+    console.log('🔍 Checando por atualizações...')
   })
 
   autoUpdater.on('update-available', (info) => {
-    console.log('Update disponível:', info.version)
+    console.log('✅ Update disponível:', info.version)
     mainWindow.webContents.send('update_available', info)
   })
 
   autoUpdater.on('update-not-available', () => {
-    console.log('Nenhuma atualização encontrada.')
+    console.log('ℹ️ Nenhuma atualização encontrada.')
   })
 
   autoUpdater.on('download-progress', (progressObj) => {
@@ -47,20 +48,21 @@ function createWindow(): void {
   })
 
   autoUpdater.on('update-downloaded', () => {
+    console.log('🎁 Update baixado e pronto para instalar.')
     mainWindow.webContents.send('update_downloaded')
   })
 
-  autoUpdater.on('error', (err) => {
-    console.error('Erro no AutoUpdater:', err)
-    // Exibe o erro na tela para sabermos o que aconteceu (Apenas para teste)
-    // mainWindow.webContents.send('update_error', err.message)
+  autoUpdater.on('error', (error) => {
+    console.error('❌ Erro no AutoUpdater:', error)
+    // Envia o erro para o renderer para debug se necessário
+    mainWindow.webContents.send('update_error', error.toString())
   })
 
-  // -----------------------------
+  // --------------------------------------------
 
   Menu.setApplicationMenu(null)
 
-  // 1. Cookies E-Hentai
+  // Cookies E-Hentai (Configurações de visualização)
   session.defaultSession.cookies.set({
     url: 'https://e-hentai.org',
     name: 'nw',
@@ -70,7 +72,7 @@ function createWindow(): void {
     expirationDate: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
   })
 
-  // 2. Bypass de CORS e CSP
+  // Bypass de CORS e CSP (Permite carregar imagens de sites com proteção)
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = { ...details.responseHeaders }
     delete responseHeaders['content-security-policy']
@@ -78,32 +80,32 @@ function createWindow(): void {
     delete responseHeaders['x-webkit-csp']
     delete responseHeaders['x-frame-options']
     delete responseHeaders['x-content-type-options']
+
     responseHeaders['Access-Control-Allow-Origin'] = ['*']
     responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, OPTIONS']
     responseHeaders['Access-Control-Allow-Headers'] = ['*']
+
     callback({ cancel: false, responseHeaders })
   })
 
-  // 3. Referer Dinâmico
+  // Gerenciamento de Referer e User-Agent para evitar bloqueios
   session.defaultSession.webRequest.onBeforeSendHeaders(
     { urls: ['*://*/*'] },
     (details, callback) => {
       details.requestHeaders['User-Agent'] =
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
       const url = details.url
       if (url.includes('erome.com')) details.requestHeaders['Referer'] = 'https://www.erome.com/'
       else if (url.includes('e-hentai.org'))
         details.requestHeaders['Referer'] = 'https://e-hentai.org/'
       else if (url.includes('donmai.us'))
         details.requestHeaders['Referer'] = 'https://danbooru.donmai.us/'
-      else if (
-        url.includes('rule34video.com') ||
-        url.includes('r34v.com') ||
-        url.includes('static-r34v.com')
-      ) {
+      else if (url.includes('rule34video.com') || url.includes('r34v.com')) {
         details.requestHeaders['Referer'] = 'https://rule34video.com/'
         details.requestHeaders['Origin'] = 'https://rule34video.com'
       }
+
       callback({ cancel: false, requestHeaders: details.requestHeaders })
     },
   )
@@ -111,7 +113,7 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
 
-    // Inicia busca por atualizações
+    // Inicia busca automática apenas se o app estiver buildado
     if (app.isPackaged) {
       autoUpdater.checkForUpdatesAndNotify()
     }
@@ -130,21 +132,25 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  // AJUSTE: Use o mesmo ID do seu package.json
+  // Define o ID do App para notificações no Windows (deve ser igual ao appId do package.json)
   electronApp.setAppUserModelId('com.diofbjr.mediadownloader')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  // --- Handlers do IPC para o Updater ---
   ipcMain.on('start_download', () => {
+    console.log('🚀 Iniciando download da atualização...')
     autoUpdater.downloadUpdate()
   })
 
   ipcMain.on('restart_app', () => {
+    console.log('🔄 Reiniciando para instalar atualização...')
     autoUpdater.quitAndInstall()
   })
 
+  // --- Handlers de Sistema ---
   ipcMain.handle('dialog:openDirectory', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openDirectory', 'createDirectory'],
@@ -178,8 +184,8 @@ app.whenReady().then(() => {
       response.data.pipe(writer)
 
       return new Promise<void>((resolve, reject) => {
-        writer.on('finish', () => resolve())
-        writer.on('error', (err) => reject(err))
+        writer.on('finish', resolve)
+        writer.on('error', reject)
       })
     } catch (error) {
       console.error('Erro no download:', error)

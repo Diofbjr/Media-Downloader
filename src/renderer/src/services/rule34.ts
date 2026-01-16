@@ -14,6 +14,15 @@ export const Rule34Provider: SiteProvider = {
     console.log(`🔎 Buscando por: "${tags}" na página ${page}`)
 
     try {
+      // DEFINIÇÃO DO LIMITE: Importante para calcular o deslocamento (PID)
+      const limit = 42
+
+      // CÁLCULO DO PID:
+      // Página 0: pid = 0
+      // Página 1: pid = 42
+      // Página 2: pid = 84...
+      const pid = page * limit
+
       const { data } = await axios.get<Rule34Post[]>('https://api.rule34.xxx/index.php', {
         params: {
           page: 'dapi',
@@ -21,7 +30,8 @@ export const Rule34Provider: SiteProvider = {
           q: 'index',
           json: 1,
           tags: tags.trim(),
-          pid: page,
+          pid: pid, // Agora envia o deslocamento correto
+          limit: limit, // Garante que o limite seja o mesmo do cálculo
           api_key:
             '7e602b5729c3a32b77f7e839f73beec34c5c248e8734460061debabf967e5cb16eec248bb70ed9eeed87f1ac1ef6283afa6132a8b4b78336f0369a0bfc720a6e',
           user_id: '5702014',

@@ -20,6 +20,7 @@ export interface SiteConfig {
 }
 
 export interface SiteProvider {
-  search: (tags: string, page: number) => Promise<MediaItem[]>
+  // O terceiro parâmetro 'options' permite passar filtros específicos (como cats)
+  search: (tags: string, page: number, options?: { cats?: string }) => Promise<MediaItem[]>
   getAlbumContent?: (albumUrl: string) => Promise<MediaItem[]>
 }

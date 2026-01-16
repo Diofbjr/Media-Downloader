@@ -1,231 +1,177 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { SiteSelector } from './components/SiteSelector'
 import { MediaGrid } from './components/Gallery/MediaGrid'
 import { Lightbox } from './components/Gallery/Lightbox'
 import { ChangelogModal } from './components/Modals/ChangelogModal'
-import { UpdateModal } from './components/Modals/UpdateModal' // Novo Import
+import { UpdateModal } from './components/Modals/UpdateModal'
+import { Pagination } from './components/layout/Pagination'
+import { Header } from './components/layout/Header'
 import { useMediaSearch } from './hooks/useMediaSearch'
 import { useFavorites } from './hooks/useFavorites'
 import { EromeProvider } from './services/erome'
-import { EHentaiProvider, getEHentaiDirectImageUrl } from './services/ehentai'
+import { EHentaiProvider, getEHentaiDirectImageUrl, EHENTAI_CATEGORIES } from './services/ehentai'
 import { SiteConfig, MediaItem } from './types'
 import { DownloadProgress } from './components/layout/DownloadProgress'
 
 function App(): React.ReactElement {
-  // Estados de Navegação
   const [selectedSite, setSelectedSite] = useState<SiteConfig | null>(null)
   const [isInsideAlbum, setIsInsideAlbum] = useState(false)
   const [showChangelog, setShowChangelog] = useState(false)
-
-  // Estados de Dados e UI
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [searchTag, setSearchTag] = useState('')
   const [downloadPath, setDownloadPath] = useState<string>('')
   const [viewingItem, setViewingItem] = useState<MediaItem | null>(null)
   const [showFavorites, setShowFavorites] = useState(false)
+  const [activeCategories, setActiveCategories] = useState<string[]>(
+    Object.keys(EHENTAI_CATEGORIES),
+  )
 
   const { media, setMedia, loading, setLoading, page, search, currentTags, clear } =
     useMediaSearch()
   const { favorites, toggleFavorite, isFavorite } = useFavorites()
-
-  // Estados de Download
   const [downloading, setDownloading] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
 
   const isSelectionMode = selectedIds.length > 0
   const displayMedia = showFavorites ? favorites : media
 
-  // Hook para carregar dados iniciais ao selecionar um site
-  useEffect(() => {
-    if (selectedSite && !showFavorites && media.length === 0) {
-      search?.(selectedSite, '', 0)
-    }
-  }, [selectedSite, showFavorites, media.length, search])
+  const catsBitmask = useMemo(() => {
+    let mask = 0
+    Object.entries(EHENTAI_CATEGORIES).forEach(([name, bit]) => {
+      if (!activeCategories.includes(name)) mask += bit
+    })
+    return mask.toString()
+  }, [activeCategories])
 
-  // Resolve URLs de imagens (ex: e-hentai)
-  const resolveMediaItem = useCallback(async (item: MediaItem): Promise<MediaItem> => {
-    if (item.fileUrl.includes('e-hentai.org/s/')) {
-      const directUrl = await getEHentaiDirectImageUrl(item.fileUrl)
-      return { ...item, fileUrl: directUrl || item.fileUrl }
-    }
-    return item
-  }, [])
+  const executeSearch = useCallback(
+    (tags: string, pageNum: number, useCursor: boolean = false) => {
+      if (!selectedSite || showFavorites || isInsideAlbum) return
 
-  // Navegação do Lightbox
-  const handleNavigateLightbox = async (direction: 'next' | 'prev') => {
-    if (!viewingItem) return
-    const currentIndex = displayMedia.findIndex((m) => m.id === viewingItem.id)
-    if (currentIndex === -1) return
+      const options: { cats: string; nextId?: string } = { cats: catsBitmask }
 
-    let nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
-    if (nextIndex < 0) nextIndex = displayMedia.length - 1
-    if (nextIndex >= displayMedia.length) nextIndex = 0
-
-    const nextItem = displayMedia[nextIndex]
-    if (nextItem.fileUrl.includes('e-hentai.org/s/')) {
-      setLoading(true)
-      const resolved = await resolveMediaItem(nextItem)
-      setViewingItem(resolved)
-      setLoading(false)
-    } else {
-      setViewingItem(nextItem)
-    }
-  }
-
-  // Visualizar item ou entrar em álbum
-  const handleViewItem = async (item: MediaItem) => {
-    const isEromeAlbum = item.fileUrl.includes('erome.com/a/')
-    const isEHentaiAlbum = item.fileUrl.includes('e-hentai.org/g/')
-
-    if (isEromeAlbum || isEHentaiAlbum) {
-      setLoading(true)
-      try {
-        let albumContent: MediaItem[] = []
-        if (isEromeAlbum) albumContent = (await EromeProvider.getAlbumContent?.(item.fileUrl)) || []
-        else if (isEHentaiAlbum)
-          albumContent = (await EHentaiProvider.getAlbumContent?.(item.fileUrl)) || []
-
-        if (albumContent.length > 0) {
-          setMedia(albumContent)
-          setIsInsideAlbum(true)
-          window.scrollTo({ top: 0, behavior: 'smooth' })
+      if (selectedSite.id === 'ehentai' && useCursor) {
+        const nextId = window._ehNextCursor
+        if (nextId) {
+          options.nextId = nextId
+          console.log('🚀 Enviando busca com cursor:', nextId)
         }
-      } catch (error) {
-        console.error(error)
-      } finally {
-        setLoading(false)
       }
-      return
-    }
 
-    if (item.fileUrl.includes('e-hentai.org/s/')) {
-      setLoading(true)
-      const resolved = await resolveMediaItem(item)
-      setViewingItem(resolved)
-      setLoading(false)
-    } else {
-      setViewingItem(item)
-    }
-  }
+      search(selectedSite, tags, pageNum, options)
+    },
+    [selectedSite, catsBitmask, showFavorites, isInsideAlbum, search],
+  )
 
-  // Lógica de Download
+  useEffect(() => {
+    if (selectedSite && !showFavorites && !isInsideAlbum) executeSearch(searchTag, 0)
+  }, [selectedSite, catsBitmask, showFavorites, isInsideAlbum, executeSearch, searchTag])
+
+  useEffect(() => {
+    setSearchTag('')
+    setIsInsideAlbum(false)
+    setShowFavorites(false)
+    setSelectedIds([])
+    setActiveCategories(Object.keys(EHENTAI_CATEGORIES))
+  }, [selectedSite])
+
   const handleDownload = async () => {
     if (!downloadPath || selectedIds.length === 0) return
     setDownloading(true)
-    setProgress({ current: 0, total: selectedIds.length })
+    const items = displayMedia.filter((m) => selectedIds.includes(m.id))
+    setProgress({ current: 0, total: items.length })
 
-    const itemsToDownload = displayMedia.filter((m) => selectedIds.includes(m.id))
-    for (let i = 0; i < itemsToDownload.length; i++) {
-      let item = itemsToDownload[i]
-      if (item.fileUrl.includes('e-hentai.org/s/')) item = await resolveMediaItem(item)
-      const ext =
-        item.fileUrl.split('.').pop()?.split('?')[0] || (item.type === 'video' ? 'mp4' : 'jpg')
-      try {
-        await window.electron.ipcRenderer.invoke('download:file', {
-          url: item.fileUrl,
-          destPath: downloadPath,
-          fileName: `${item.id.replace(/[^a-z0-9]/gi, '_')}.${ext}`,
-        })
-      } catch (err) {
-        console.error(err)
+    for (let i = 0; i < items.length; i++) {
+      let item = items[i]
+      if (item.fileUrl.includes('e-hentai.org/s/')) {
+        const direct = await getEHentaiDirectImageUrl(item.fileUrl)
+        item = { ...item, fileUrl: direct || item.fileUrl }
       }
-      setProgress((prev) => ({ ...prev, current: i + 1 }))
+      const ext = item.fileUrl.split('.').pop()?.split('?')[0] || 'jpg'
+      await window.electron.ipcRenderer.invoke('download:file', {
+        url: item.fileUrl,
+        destPath: downloadPath,
+        fileName: `${item.id.replace(/[^a-z0-9]/gi, '_')}.${ext}`,
+      })
+      setProgress((p) => ({ ...p, current: i + 1 }))
     }
     setDownloading(false)
     setSelectedIds([])
   }
 
-  // TELA INICIAL (Site Selector)
-  if (!selectedSite) {
+  const handleViewItem = async (item: MediaItem) => {
+    const isAlbum =
+      item.fileUrl.includes('erome.com/a/') || item.fileUrl.includes('e-hentai.org/g/')
+    if (isAlbum) {
+      setLoading(true)
+      const content = item.fileUrl.includes('erome')
+        ? await EromeProvider.getAlbumContent?.(item.fileUrl)
+        : await EHentaiProvider.getAlbumContent?.(item.fileUrl)
+      if (content) {
+        setMedia(content)
+        setIsInsideAlbum(true)
+        window.scrollTo(0, 0)
+      }
+      setLoading(false)
+      return
+    }
+    if (item.fileUrl.includes('e-hentai.org/s/')) {
+      setLoading(true)
+      const direct = await getEHentaiDirectImageUrl(item.fileUrl)
+      setViewingItem({ ...item, fileUrl: direct || item.fileUrl })
+      setLoading(false)
+    } else setViewingItem(item)
+  }
+
+  if (!selectedSite)
     return (
       <>
         <SiteSelector onSelect={setSelectedSite} onOpenChangelog={() => setShowChangelog(true)} />
         {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
-        <UpdateModal /> {/* Monitoramento de update na Home */}
+        <UpdateModal />
       </>
     )
-  }
 
-  // TELA DE GALERIA
   return (
     <div className="flex flex-col h-screen bg-[#0a0c0f] text-slate-200">
-      <nav className="z-40 bg-[#0d1014] border-b border-white/5 px-6 py-4 flex items-center gap-4 shrink-0">
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => {
-              if (isInsideAlbum) {
-                setIsInsideAlbum(false)
-                search?.(selectedSite, currentTags, page)
-              } else {
-                setSelectedSite(null)
-                clear()
-              }
-            }}
-            className="h-10 px-3 bg-white/5 hover:bg-white/10 rounded-xl text-blue-500 font-bold text-[10px] border border-white/5"
-          >
-            {isInsideAlbum ? '← VOLTAR' : '← SAIR'}
-          </button>
+      <Header
+        siteName={selectedSite.name}
+        isEHentai={selectedSite.id === 'ehentai'}
+        isInsideAlbum={isInsideAlbum}
+        showFavorites={showFavorites}
+        searchTag={searchTag}
+        downloadPath={downloadPath}
+        selectedCount={selectedIds.length}
+        activeCategories={activeCategories}
+        isDownloading={downloading}
+        canDownload={isSelectionMode && !!downloadPath}
+        onBack={() => {
+          if (isInsideAlbum) {
+            setIsInsideAlbum(false)
+            executeSearch(currentTags, page)
+          } else {
+            setSelectedSite(null)
+            clear()
+          }
+        }}
+        onToggleFavorites={() => setShowFavorites(!showFavorites)}
+        setSearchTag={setSearchTag}
+        onSearch={() => executeSearch(searchTag, 0)}
+        onSelectPath={async () => {
+          const path = await window.electron.ipcRenderer.invoke('dialog:openDirectory')
+          if (path) setDownloadPath(path)
+        }}
+        onDownload={handleDownload}
+        onToggleCategory={(cat) =>
+          setActiveCategories((prev) =>
+            prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
+          )
+        }
+      />
 
-          <button
-            onClick={() => setShowFavorites(!showFavorites)}
-            className={`h-10 px-4 rounded-xl text-[10px] font-black transition-all border border-white/5 ${
-              showFavorites ? 'bg-pink-600 text-white' : 'bg-white/5 text-gray-400'
-            }`}
-          >
-            {showFavorites ? '❤️ FAVORITOS' : '♡ FAVORITOS'}
-          </button>
-
-          <button
-            onClick={() => setShowChangelog(true)}
-            className="h-10 w-10 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-lg"
-          >
-            🚀
-          </button>
-        </div>
-
-        {!showFavorites && (
-          <div className="flex-1 max-w-2xl flex gap-2">
-            <input
-              type="text"
-              className="flex-1 bg-black/40 border border-white/10 rounded-xl px-5 h-10 text-sm outline-none focus:ring-2 focus:ring-blue-500/50"
-              placeholder={`Pesquisar em ${selectedSite.name}...`}
-              value={searchTag}
-              onChange={(e) => setSearchTag(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && search?.(selectedSite, searchTag, 0)}
-            />
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={async () => {
-              const path = await window.electron.ipcRenderer.invoke('dialog:openDirectory')
-              if (path) setDownloadPath(path)
-            }}
-            className={`h-10 px-4 border rounded-xl font-bold text-[10px] ${
-              downloadPath
-                ? 'border-green-500/50 text-green-500 bg-green-500/5'
-                : 'border-white/10 text-gray-400'
-            }`}
-          >
-            {downloadPath ? 'PASTA OK' : 'PASTA'}
-          </button>
-          <button
-            onClick={handleDownload}
-            disabled={!isSelectionMode || !downloadPath || downloading}
-            className="h-10 px-6 bg-green-600 disabled:bg-gray-800 rounded-xl text-[10px] font-black text-white"
-          >
-            {downloading ? 'BAIXANDO...' : `BAIXAR (${selectedIds.length})`}
-          </button>
-        </div>
-      </nav>
-      <main className="flex-1 overflow-y-auto p-6 custom-scrollbar scroll-smooth">
+      <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
         {loading && !showFavorites && !viewingItem ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4">
-            <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-[10px] font-black text-blue-500 animate-pulse tracking-widest">
-              CARREGANDO
-            </p>
+          <div className="flex h-full items-center justify-center font-black text-blue-500">
+            CARREGANDO...
           </div>
         ) : (
           <>
@@ -234,62 +180,41 @@ function App(): React.ReactElement {
               selectedIds={selectedIds}
               isSelectionMode={isSelectionMode}
               onToggleItem={(id) =>
-                setSelectedIds((prev) =>
-                  prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
-                )
+                setSelectedIds((p) => (p.includes(id) ? p.filter((i) => i !== id) : [...p, id]))
               }
               onViewItem={handleViewItem}
               onFavorite={toggleFavorite}
               isFavorite={isFavorite}
             />
-            {!showFavorites && !isInsideAlbum && displayMedia.length > 0 && (
-              <div className="flex items-center justify-center gap-8 py-16">
-                <button
-                  disabled={page === 0}
-                  onClick={() => {
-                    search?.(selectedSite, currentTags, page - 1)
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
-                  }}
-                  className="px-8 py-3 bg-white/5 border border-white/5 rounded-2xl disabled:opacity-10 font-black text-[10px] hover:bg-white/10"
-                >
-                  ❮ ANTERIOR
-                </button>
-                <div className="text-center min-w-20">
-                  <p className="text-[10px] text-blue-500 font-black mb-1 uppercase">Página</p>
-                  <p className="text-xl font-mono leading-none">{page + 1}</p>
-                </div>
-                <button
-                  onClick={() => {
-                    search?.(selectedSite, currentTags, page + 1)
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
-                  }}
-                  className="px-8 py-3 bg-white/5 border border-white/5 rounded-2xl font-black text-[10px] hover:bg-white/10"
-                >
-                  PRÓXIMA ❯
-                </button>
-              </div>
-            )}
+            <Pagination
+              page={page}
+              hasMedia={displayMedia.length > 0 && !isInsideAlbum && !showFavorites}
+              canPrev={page > 0}
+              onNext={() => {
+                executeSearch(currentTags, page + 1, true)
+                window.scrollTo(0, 0)
+              }}
+              onPrev={() => executeSearch(currentTags, page - 1)}
+            />
           </>
         )}
       </main>
-      {/* MODAIS E OVERLAYS */}
-      {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
+
       {downloading && <DownloadProgress current={progress.current} total={progress.total} />}
-      <UpdateModal /> {/* Monitoramento de update na Galeria */}
       {viewingItem && (
         <Lightbox
           item={viewingItem}
+          isFavorite={isFavorite(viewingItem.id)}
           onClose={() => setViewingItem(null)}
-          onNext={() => handleNavigateLightbox('next')}
-          onPrev={() => handleNavigateLightbox('prev')}
+          onFavorite={() => toggleFavorite(viewingItem)}
+          onNext={() => {}}
+          onPrev={() => {}}
           onTagClick={(tag) => {
             setIsInsideAlbum(false)
             setSearchTag(tag)
-            search?.(selectedSite, tag, 0)
+            executeSearch(tag, 0)
             setViewingItem(null)
           }}
-          isFavorite={isFavorite(viewingItem.id)}
-          onFavorite={() => toggleFavorite(viewingItem)}
           downloadPath={downloadPath}
         />
       )}
