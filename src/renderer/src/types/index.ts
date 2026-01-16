@@ -8,19 +8,15 @@ export interface MediaItem {
   type: 'image' | 'video' | 'gif'
   rating: string
   source?: string
-}
-
-export interface SiteConfig {
-  id: string
-  name: string
-  url: string
-  description: string
-  icon: string
-  color: string
+  albumId?: string // Útil para Erome/E-Hentai
 }
 
 export interface SiteProvider {
-  // O terceiro parâmetro 'options' permite passar filtros específicos (como cats)
-  search: (tags: string, page: number, options?: { cats?: string }) => Promise<MediaItem[]>
+  search: (
+    tags: string,
+    page: number,
+    options?: { cats?: string; nextId?: string },
+  ) => Promise<MediaItem[]>
   getAlbumContent?: (albumUrl: string) => Promise<MediaItem[]>
+  limit: number // Adicionamos o limite fixo aqui para o Hook saber calcular o canNext
 }

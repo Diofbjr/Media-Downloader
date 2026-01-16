@@ -1,6 +1,6 @@
 import { AVAILABLE_SITES } from '@renderer/constants/sites'
-import { SiteConfig } from '../types'
 import { UpdateModal } from './Modals/UpdateModal'
+import { SiteConfig } from '@renderer/config/sites'
 
 export const SiteSelector = ({
   onSelect,

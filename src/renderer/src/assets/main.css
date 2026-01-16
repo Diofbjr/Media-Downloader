@@ -26,12 +26,14 @@
 }
 
 @layer components {
+  /* Navegação com efeito de vidro */
   .glass-nav {
     background: rgba(15, 17, 20, 0.8);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
   }
 
+  /* Animação de entrada dos cards da Grid */
   @keyframes card-entry {
     from { opacity: 0; transform: translateY(15px); }
     to { opacity: 1; transform: translateY(0); }
@@ -39,5 +41,43 @@
 
   .animate-card {
     animation: card-entry 0.4s ease-out forwards;
+  }
+
+  /* --- NOVAS ANIMAÇÕES PARA O LIGHTBOX --- */
+
+  /* Slide vindo da Direita (Next) */
+  @keyframes slideInFromRight {
+    from { transform: translateX(60px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  /* Slide vindo da Esquerda (Prev) */
+  @keyframes slideInFromLeft {
+    from { transform: translateX(-60px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  .slide-in-from-right {
+    animation: slideInFromRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .slide-in-from-left {
+    animation: slideInFromLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  /* Estilo para manter a nitidez da imagem em Zoom */
+  .image-render-pixel {
+    image-rendering: high-quality;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Custom scrollbar para o footer do Lightbox */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.3);
+    border-radius: 4px;
   }
 }

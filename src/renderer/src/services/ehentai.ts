@@ -6,7 +6,7 @@ declare global {
   }
 }
 
-// Exportamos para garantir que o compilador veja o uso e para possível reuso
+// Interface estendida para o EHentai
 export interface EHentaiSearchOptions {
   cats?: string
   nextId?: string
@@ -51,14 +51,18 @@ export const getEHentaiDirectImageUrl = async (pageUrl: string): Promise<string>
 }
 
 export const EHentaiProvider: SiteProvider = {
+  limit: 25, // Adicionado para cumprir a interface SiteProvider
+
   search: async (tags, page = 0, options) => {
     try {
-      // Fazemos o cast aqui para o TS parar de reclamar do nextId
       const ehOptions = options as EHentaiSearchOptions
       const params = new URLSearchParams()
 
+      // Lógica de Cursor/Próxima Página
       if (ehOptions?.nextId) {
         params.append('next', ehOptions.nextId)
+      } else if (page > 0 && window._ehNextCursor) {
+        params.append('next', window._ehNextCursor)
       } else {
         params.append('page', page.toString())
       }
@@ -71,48 +75,46 @@ export const EHentaiProvider: SiteProvider = {
       const html = await response.text()
       const doc = new DOMParser().parseFromString(html, 'text/html')
 
+      // Captura o cursor para a próxima página
       let foundNext: string | null = null
-      const nextBtn = Array.from(doc.querySelectorAll('.ptb td a')).find(
-        (a) => a.textContent === '>' || a.id === 'ptright',
-      ) as HTMLAnchorElement | undefined
+      const nextBtn = doc.querySelector(
+        '#pnt + table a#next, .ptb td a[id="ptright"]',
+      ) as HTMLAnchorElement
 
       if (nextBtn?.href.includes('next=')) {
         foundNext = new URL(nextBtn.href).searchParams.get('next')
       }
 
-      if (!foundNext) {
-        const anyNextLink = doc.querySelector('a[href*="next="]') as HTMLAnchorElement | null
-        if (anyNextLink) foundNext = new URL(anyNextLink.href).searchParams.get('next')
-      }
-
       window._ehNextCursor = foundNext
 
       const items: MediaItem[] = []
+      // Seletor para os dois modos de visualização do site (Extended e Thumbnail)
       const rows = doc.querySelectorAll('table.itg tr, .gl1t')
 
       rows.forEach((row, i) => {
         const linkElement = row.querySelector('a[href*="/g/"]') as HTMLAnchorElement
         if (!linkElement) return
+
         const imgElement = row.querySelector('img')
         const catElem = row.querySelector('.cn, .gl1c div, .cs')
         const previewUrl = imgElement?.getAttribute('data-src') || imgElement?.src || ''
+
+        // Evita duplicatas se o seletor pegar o header da tabela
+        if (previewUrl.includes('clear.gif') || !linkElement.href) return
 
         items.push({
           id: `eh-${linkElement.href.split('/')[4] || i}-${Math.random().toString(36).substring(2, 6)}`,
           type: 'image',
           previewUrl,
-          fileUrl: linkElement.href,
-          tags: [
-            catElem?.textContent?.trim() || 'Misc',
-            linkElement.textContent?.trim() || 'Gallery',
-          ],
+          fileUrl: linkElement.href, // URL do Álbum/Galeria
+          tags: [catElem?.textContent?.trim() || 'Misc'],
           rating: 'nsfw',
         })
       })
 
       return items
     } catch (err) {
-      console.error(err)
+      console.error('❌ [E-Hentai Search] Erro:', err)
       return []
     }
   },
@@ -137,6 +139,7 @@ export const EHentaiProvider: SiteProvider = {
 
         let thumbUrl = ''
 
+        // O E-Hentai usa diferentes formas de exibir thumbnails (Sprite sheets ou imagens diretas)
         if (img?.getAttribute('data-src')) {
           thumbUrl = img.getAttribute('data-src')!
         } else if (img?.style.backgroundImage) {
@@ -156,7 +159,7 @@ export const EHentaiProvider: SiteProvider = {
             id: `eh-img-${i}-${Math.random().toString(36).substring(2, 7)}`,
             type: 'image',
             previewUrl: thumbUrl,
-            fileUrl: anchor.href,
+            fileUrl: anchor.href, // URL da página individual da imagem
             tags: albumTags,
             rating: 'nsfw',
           })

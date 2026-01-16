@@ -4,25 +4,35 @@ export interface SiteConfig {
   name: string
   url: string
   description: string
-  icon: string // Pode ser uma URL ou uma cor
-  color: string
+  icon: string
+  color: string // Usaremos Hex para cálculos de transparência
+  disabled?: boolean
 }
 
-export const AVAILABLE_SITES: SiteConfig[] = [
+export const SITES: SiteConfig[] = [
   {
-    id: 'rule34',
-    name: 'Rule34.xxx',
-    url: 'https://rule34.xxx',
-    description: 'Acesso à API oficial para download de mídias.',
-    icon: 'R34',
-    color: 'border-green-500 hover:bg-green-500/10'
+    id: 'erome',
+    name: 'Erome',
+    url: 'https://www.erome.com',
+    description: 'Navegue por álbuns de fotos e vídeos em alta qualidade.',
+    icon: '📸',
+    color: '#3b82f6' // Blue 500
+  },
+  {
+    id: 'ehentai',
+    name: 'E-Hentai',
+    url: 'https://e-hentai.org',
+    description: 'Acesso a galerias e metadados detalhados com suporte a categorias.',
+    icon: '⛩️',
+    color: '#f97316' // Orange 500
   },
   {
     id: 'placeholder',
     name: 'Em breve...',
     url: '',
-    description: 'Novas fontes de mídia serão adicionadas aqui.',
-    icon: '?',
-    color: 'border-gray-600 opacity-50 cursor-not-allowed'
+    description: 'Novas fontes de mídia serão adicionadas em futuras atualizações.',
+    icon: '⏳',
+    color: '#4b5563', // Gray 600
+    disabled: true
   }
 ]

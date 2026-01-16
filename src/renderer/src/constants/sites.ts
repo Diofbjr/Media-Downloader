@@ -1,4 +1,4 @@
-import { SiteConfig } from '../types'
+import { SiteConfig } from '@renderer/config/sites'
 
 export const AVAILABLE_SITES: SiteConfig[] = [
   {
@@ -34,14 +34,6 @@ export const AVAILABLE_SITES: SiteConfig[] = [
     color: '#2e76b4',
   },
   {
-    id: 'ehentai',
-    name: 'E-Hentai',
-    url: 'https://e-hentai.org',
-    description: 'Galeria massiva de doujinshis mangás, hentais e muito mais.',
-    icon: '🏮',
-    color: '#EDEBDF',
-  },
-  {
     id: 'erome',
     name: 'Erome',
     url: 'https://www.erome.com',
@@ -50,3 +42,16 @@ export const AVAILABLE_SITES: SiteConfig[] = [
     color: '#3b82f6',
   },
 ]
+
+{
+  /*
+{
+    id: 'ehentai',
+    name: 'E-Hentai',
+    url: 'https://e-hentai.org',
+    description: 'Galeria massiva de doujinshis mangás, hentais e muito mais.',
+    icon: '🏮',
+    color: '#EDEBDF',
+  },
+*/
+}

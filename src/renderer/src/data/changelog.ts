@@ -8,14 +8,17 @@ export interface Version {
 export const changelogData: Version[] = [
   {
     version: '1.0.5',
-    date: '2026-01-16', // Ajuste para a data atual se necessário
+    date: '2026-01-16',
     type: 'patch',
     changes: [
-      'Correção crítica no sistema de paginação do E-Hentai (Cursor dinâmico).',
-      'Nova lógica de detecção de thumbnails em álbuns (Suporte a Sprites e Lazy Loading).',
-      'Implementação completa do sistema de Notificação de Atualizações.',
-      'Refatoração de tipos TypeScript para eliminar avisos de compilação.',
-      'Melhoria no bypass de segurança (CSP/CORS) para carregamento de imagens externas.',
+      'Refatoração completa do MediaCard em sub-componentes (CardMedia, CardOverlays, CardPressEffect).',
+      'Nova lógica de detecção de miniaturas com múltiplos fallbacks (previewUrl, thumbnailUrl, poster).',
+      'Implementação de sistema de interação híbrida: Clique rápido para visualizar / Clique longo para selecionar.',
+      'Sincronização de eventos de mouse via Timestamp para evitar conflitos de seleção acidental.',
+      'Adicionado componente de progresso de download em tempo real no rodapé.',
+      'Melhoria na tipagem global (ExtendedMediaItem) para suporte a metadados dinâmicos de APIs.',
+      'Correção de bugs visuais no hover de vídeos e badges de álbuns.',
+      'Otimização de performance na renderização da galeria e limpeza de timers de memória.',
     ],
   },
   {

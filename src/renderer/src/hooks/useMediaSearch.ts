@@ -1,23 +1,25 @@
 import { useState, useCallback } from 'react'
-import { MediaItem, SiteConfig } from '../types'
+import { MediaItem } from '../types'
 import { Rule34Provider } from '../services/rule34'
 import { EromeProvider } from '../services/erome'
 import { GelbooruProvider } from '../services/gelbooru'
-import { E621Provider } from '@renderer/services/e621'
-import { DanbooruProvider } from '@renderer/services/danbooru'
-import { EHentaiProvider } from '@renderer/services/ehentai'
+import { E621Provider } from '../services/e621'
+import { DanbooruProvider } from '../services/danbooru'
+import { EHentaiProvider } from '../services/ehentai'
+import { SiteConfig } from '@renderer/config/sites'
 
 export function useMediaSearch() {
   const [media, setMedia] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(0)
   const [currentTags, setCurrentTags] = useState('')
+  const [canNext, setCanNext] = useState(true)
 
   const clear = useCallback(() => {
     setMedia([])
     setPage(0)
     setCurrentTags('')
-    setLoading(false)
+    setCanNext(true)
   }, [])
 
   const search = useCallback(
@@ -30,39 +32,41 @@ export function useMediaSearch() {
       setLoading(true)
       try {
         let results: MediaItem[] = []
+        let providerLimit = 20
 
         switch (site.id) {
           case 'rule34':
             results = await Rule34Provider.search(tags, pageNum)
+            providerLimit = 42
             break
           case 'gelbooru':
             results = await GelbooruProvider.search(tags, pageNum)
+            providerLimit = 20
             break
           case 'e621':
             results = await E621Provider.search(tags, pageNum)
+            providerLimit = 50
             break
           case 'danbooru':
             results = await DanbooruProvider.search(tags, pageNum)
+            providerLimit = 40
             break
           case 'ehentai':
-            // Repassa as opções (incluindo o bitmask 'cats') para o provider
             results = await EHentaiProvider.search(tags, pageNum, options)
+            providerLimit = 25
             break
           case 'erome':
             results = await EromeProvider.search(tags, pageNum)
+            providerLimit = 12
             break
-          default:
-            results = []
         }
 
-        // Atualiza os estados apenas após o sucesso da busca
         setMedia(results)
         setPage(pageNum)
         setCurrentTags(tags)
+        setCanNext(results.length >= providerLimit)
       } catch (error) {
         console.error('Erro na busca:', error)
-        // Opcional: manter o que já estava na tela em caso de erro ou limpar
-        // setMedia([])
       } finally {
         setLoading(false)
       }
@@ -72,12 +76,14 @@ export function useMediaSearch() {
 
   return {
     media,
-    setMedia,
     loading,
-    setLoading,
     page,
-    search,
     currentTags,
+    search,
+    canNext,
+    setPage,
+    setMedia,
+    setLoading,
     clear,
   }
 }
