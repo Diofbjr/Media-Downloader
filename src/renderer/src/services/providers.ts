@@ -9,7 +9,7 @@ export interface MediaItem {
 }
 
 export interface SiteProvider {
-  limit: number
+  limit?: number
   search: (tags: string, page: number) => Promise<MediaItem[]>
   getAlbumContent?: (url: string) => Promise<MediaItem[]>
 }

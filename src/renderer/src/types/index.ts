@@ -6,9 +6,9 @@ export interface MediaItem {
   height?: number
   tags: string[]
   type: 'image' | 'video' | 'gif'
-  rating: string
+  rating?: string // O "?" resolve o erro TS2322 do Actions
   source?: string
-  albumId?: string // Útil para Erome/E-Hentai
+  albumId?: string
 }
 
 export interface SiteProvider {
