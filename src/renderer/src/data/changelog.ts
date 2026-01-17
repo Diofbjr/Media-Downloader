@@ -7,6 +7,18 @@ export interface Version {
 
 export const changelogData: Version[] = [
   {
+    version: '1.0.8',
+    date: '2026-01-17',
+    type: 'patch',
+    changes: [
+      'Correção Crítica de Paginação: Implementado sistema de backup de navegação que preserva a página atual e os resultados ao retornar de um álbum.',
+      'Refatoração de Arquitetura: Divisão do componente principal (App.tsx) em hooks especializados (useDownloadManager, useAppNavigation) para melhor manutenção.',
+      'Correção de Loop de Busca: Implementada trava de segurança (Ref) para impedir que o auto-fetch resetasse a galeria para a página 1 ao fechar álbuns.',
+      'Otimização de Memória: Limpeza de estados de backup após a restauração da navegação para evitar vazamentos de memória.',
+      'Melhoria na Lightbox: Implementada navegação sequencial (Próximo/Anterior) integrada à lista de exibição atual, incluindo suporte a favoritos.',
+    ],
+  },
+  {
     version: '1.0.6',
     date: '2026-01-17',
     type: 'patch',

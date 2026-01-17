@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { SiteSelector } from './components/SiteSelector'
 import { MediaGrid } from './components/Gallery/MediaGrid'
 import { Lightbox } from './components/Gallery/Lightbox'
@@ -9,200 +9,87 @@ import { Header } from './components/layout/Header'
 import { DownloadProgress } from './components/layout/DownloadProgress'
 import { Pagination } from './components/layout/Pagination'
 
-// Hooks e Contextos
 import { useMediaSearch } from './hooks/useMediaSearch'
+import { useDownloadManager } from './hooks/useDownloadManager'
+import { useAppNavigation } from './hooks/useAppNavigation'
 import { useDebounce } from './hooks/useDebounce'
-
-// Services e Types
-import { EromeProvider } from './services/erome'
-import { EHentaiProvider, getEHentaiDirectImageUrl, EHENTAI_CATEGORIES } from './services/ehentai'
-import { MediaItem } from './types'
-import { SiteConfig } from './config/sites'
 import { useFavorites } from './contexts/useFavorites'
+import { EHENTAI_CATEGORIES } from './services/ehentai' // Removido getEHentaiDirectImageUrl daqui pois o useDownloadManager já cuida disso
+import { EromeProvider } from './services/erome'
+import { EHentaiProvider } from './services/ehentai'
+import { MediaItem } from './types'
 
-function App(): React.ReactElement {
-  // --- ESTADOS DE NAVEGAÇÃO ---
-  const [selectedSite, setSelectedSite] = useState<SiteConfig | null>(null)
-  const [isInsideAlbum, setIsInsideAlbum] = useState(false)
+export default function App() {
+  // --- ESTADOS DE UI ---
+  const [selectedSite, setSelectedSite] = useState<any>(null)
   const [showChangelog, setShowChangelog] = useState(false)
-  const [viewingItem, setViewingItem] = useState<MediaItem | null>(null)
   const [showFavorites, setShowFavorites] = useState(false)
-
-  // --- ESTADOS DE BUSCA E SELEÇÃO ---
   const [searchTag, setSearchTag] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [activeCategories, setActiveCategories] = useState<string[]>(
-    Object.keys(EHENTAI_CATEGORIES),
-  )
-
-  // --- ESTADOS DE DOWNLOAD ---
-  const [downloadPath, setDownloadPath] = useState<string>(() => {
-    return localStorage.getItem('app-download-path') || ''
-  })
-  const [downloading, setDownloading] = useState(false)
-  const [progress, setProgress] = useState({ current: 0, total: 0 })
+  const [activeCategories, setActiveCategories] = useState(Object.keys(EHENTAI_CATEGORIES))
+  const [downloadPath, setDownloadPath] = useState(localStorage.getItem('app-download-path') || '')
 
   // --- HOOKS ---
-  const { media, setMedia, loading, setLoading, page, search, currentTags, clear, canNext } =
+  const { media, setMedia, loading, page, setPage, search, currentTags, clear, canNext } =
     useMediaSearch()
-
-  // Hook de Contexto Global de Favoritos
+  const { downloading, progress, startDownload } = useDownloadManager()
   const { favorites, toggleFavorite, isFavorite } = useFavorites()
-
-  // Hook de Debounce: Atrasamos a tag em 500ms para evitar spam na API
+  const nav = useAppNavigation()
   const debouncedSearchTag = useDebounce(searchTag, 500)
 
-  // --- LÓGICA DE EXIBIÇÃO ---
-  const isSelectionMode = selectedIds.length > 0
+  const displayMedia = showFavorites ? favorites : media
 
-  const displayMedia = useMemo(
-    () => (showFavorites ? favorites : media),
-    [showFavorites, favorites, media],
-  )
-
-  const catsBitmask = useMemo(() => {
-    let mask = 0
-    Object.entries(EHENTAI_CATEGORIES).forEach(([name, bit]) => {
-      if (!activeCategories.includes(name)) mask += bit
-    })
-    return mask.toString()
-  }, [activeCategories])
-
-  // --- FUNÇÕES DE BUSCA ---
-  const executeSearch = useCallback(
-    (tags: string, pageNum: number, useCursor: boolean = false) => {
-      // Bloqueia busca se estiver vendo favoritos ou dentro de um álbum
-      if (!selectedSite || showFavorites || isInsideAlbum) return
-
-      const options: { cats: string; nextId?: string } = { cats: catsBitmask }
-
-      if (selectedSite.id === 'ehentai' && useCursor) {
-        const nextId = (window as any)._ehNextCursor
-        if (nextId) options.nextId = nextId
-      }
-      search(selectedSite, tags, pageNum, options)
-    },
-    [selectedSite, catsBitmask, showFavorites, isInsideAlbum, search],
-  )
-
-  // Efeito principal de busca: Agora observa 'debouncedSearchTag'
+  // --- BUSCA AUTOMÁTICA ---
   useEffect(() => {
-    if (selectedSite && !showFavorites && !isInsideAlbum) {
-      executeSearch(debouncedSearchTag, 0)
+    if (!selectedSite || showFavorites) return
+    if (nav.isReturningFromAlbum.current) {
+      nav.isReturningFromAlbum.current = false
+      return
     }
-  }, [debouncedSearchTag, selectedSite, catsBitmask, showFavorites, isInsideAlbum, executeSearch])
+    if (!nav.isInsideAlbum) search(selectedSite, debouncedSearchTag, 0)
+  }, [debouncedSearchTag, selectedSite, showFavorites, nav.isInsideAlbum])
 
-  // Reset de estados ao trocar de site
-  useEffect(() => {
-    setSearchTag('')
-    setIsInsideAlbum(false)
-    setShowFavorites(false)
-    setSelectedIds([])
-    setActiveCategories(Object.keys(EHENTAI_CATEGORIES))
-  }, [selectedSite])
-
-  // --- HANDLERS DE SELEÇÃO E VISUALIZAÇÃO ---
+  // --- HANDLERS ---
   const handleToggleItem = (id: string) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]))
   }
 
   const handleViewItem = useCallback(
     async (item: MediaItem) => {
-      // 1. CORREÇÃO CRUCIAL: Se já existe algo selecionado,
-      // QUALQUER clique (curto ou longo) deve apenas alternar a seleção.
-      if (selectedIds.length > 0) {
-        handleToggleItem(item.id)
-        return
-      }
+      if (selectedIds.length > 0) return handleToggleItem(item.id)
 
-      // Se chegou aqui, é um clique simples para abrir a mídia
       const isAlbum =
         item.fileUrl.includes('erome.com/a/') || item.fileUrl.includes('e-hentai.org/g/')
-
       if (isAlbum) {
-        setLoading(true)
+        nav.prepareBackup(media, page, currentTags)
         const content = item.fileUrl.includes('erome')
           ? await EromeProvider.getAlbumContent?.(item.fileUrl)
           : await EHentaiProvider.getAlbumContent?.(item.fileUrl)
         if (content) {
           setMedia(content)
-          setIsInsideAlbum(true)
-          document.querySelector('main')?.scrollTo(0, 0)
+          nav.setIsInsideAlbum(true)
         }
-        setLoading(false)
-        return
-      }
-
-      if (item.fileUrl.includes('e-hentai.org/s/')) {
-        setLoading(true)
-        const direct = await getEHentaiDirectImageUrl(item.fileUrl)
-        setViewingItem({ ...item, fileUrl: direct || item.fileUrl })
-        setLoading(false)
       } else {
-        setViewingItem(item)
+        nav.setViewingItem(item)
       }
     },
-    [selectedIds, setLoading, setMedia, handleToggleItem], // Adicionado selectedIds e handleToggleItem aqui
+    [selectedIds, media, page, currentTags],
   )
 
-  // --- LÓGICA DE DOWNLOAD ---
-  const handleDownload = async () => {
-    if (!downloadPath || selectedIds.length === 0) return
-    setDownloading(true)
-
-    // 1. Identificar quais itens selecionados são álbuns e quais são mídias diretas
-    const selectedItems = displayMedia.filter((m) => selectedIds.includes(m.id))
-    const finalDownloadQueue: MediaItem[] = []
-
-    for (const item of selectedItems) {
-      const isAlbum =
-        item.fileUrl.includes('erome.com/a/') || item.fileUrl.includes('e-hentai.org/g/')
-
-      if (isAlbum) {
-        // Se for álbum, buscamos o conteúdo interno antes de baixar
-        const content = item.fileUrl.includes('erome')
-          ? await EromeProvider.getAlbumContent?.(item.fileUrl)
-          : await EHentaiProvider.getAlbumContent?.(item.fileUrl)
-
-        if (content) {
-          finalDownloadQueue.push(...content)
-        }
-      } else {
-        // Se for mídia direta, vai direto para a fila
-        finalDownloadQueue.push(item)
-      }
+  const handleBack = () => {
+    if (nav.isInsideAlbum && nav.navigationBackup) {
+      nav.isReturningFromAlbum.current = true
+      nav.setIsInsideAlbum(false)
+      setMedia(nav.navigationBackup.media)
+      setPage(nav.navigationBackup.page)
+      nav.setNavigationBackup(null)
+    } else {
+      setSelectedSite(null)
+      clear()
     }
-
-    // 2. Executar o download da fila final acumulada
-    setProgress({ current: 0, total: finalDownloadQueue.length })
-
-    for (let i = 0; i < finalDownloadQueue.length; i++) {
-      let item = finalDownloadQueue[i]
-
-      // Resolução de links do E-Hentai se necessário
-      if (item.fileUrl.includes('e-hentai.org/s/')) {
-        const direct = await getEHentaiDirectImageUrl(item.fileUrl)
-        item = { ...item, fileUrl: direct || item.fileUrl }
-      }
-
-      const ext = item.fileUrl.split('.').pop()?.split('?')[0] || 'jpg'
-
-      await window.electron.ipcRenderer.invoke('download:file', {
-        url: item.fileUrl,
-        destPath: downloadPath,
-        // Dica: Para álbuns, talvez você queira criar uma subpasta aqui futuramente
-        fileName: `${item.id.replace(/[^a-z0-9]/gi, '_')}.${ext}`,
-      })
-
-      setProgress((p) => ({ ...p, current: i + 1 }))
-    }
-
-    setDownloading(false)
-    setSelectedIds([])
   }
 
-  // --- RENDERIZAÇÃO LOBBY ---
-  if (!selectedSite) {
+  if (!selectedSite)
     return (
       <>
         <SiteSelector onSelect={setSelectedSite} onOpenChangelog={() => setShowChangelog(true)} />
@@ -210,56 +97,49 @@ function App(): React.ReactElement {
         <UpdateModal />
       </>
     )
-  }
 
-  // --- RENDERIZAÇÃO GALERIA ---
   return (
     <div className="flex flex-col h-screen bg-[#0a0c0f] text-slate-200">
       <Header
         siteName={selectedSite.name}
-        isEHentai={selectedSite.id === 'ehentai'}
-        isInsideAlbum={isInsideAlbum}
+        isInsideAlbum={nav.isInsideAlbum}
         showFavorites={showFavorites}
         searchTag={searchTag}
-        downloadPath={downloadPath}
-        selectedCount={selectedIds.length}
-        activeCategories={activeCategories}
-        isDownloading={downloading}
-        canDownload={isSelectionMode && !!downloadPath}
-        onBack={() => {
-          if (isInsideAlbum) {
-            setIsInsideAlbum(false)
-            executeSearch(currentTags, page)
-          } else {
-            setSelectedSite(null)
-            clear()
-          }
-        }}
-        onToggleFavorites={() => setShowFavorites(!showFavorites)}
         setSearchTag={setSearchTag}
-        onSearch={() => executeSearch(searchTag, 0)}
-        onSelectPath={async () => {
-          // Chama o Electron para abrir o seletor de pastas
-          const path = await window.electron.ipcRenderer.invoke('dialog:openDirectory')
-          if (path) {
-            setDownloadPath(path)
-            // SALVA O CAMINHO: Garante que ao reabrir o app a pasta esteja lá
-            localStorage.setItem('app-download-path', path)
-          }
-        }}
-        onDownload={handleDownload}
+        onBack={handleBack}
+        onSearch={() => search(selectedSite, searchTag, 0)}
+        onToggleFavorites={() => setShowFavorites(!showFavorites)}
+        selectedCount={selectedIds.length}
+        downloadPath={downloadPath}
+        onDownload={() =>
+          startDownload(
+            displayMedia.filter((m) => selectedIds.includes(m.id)),
+            downloadPath,
+          )
+        }
+        isDownloading={downloading}
+        canDownload={selectedIds.length > 0 && !!downloadPath}
+        activeCategories={activeCategories}
         onToggleCategory={(cat) =>
           setActiveCategories((prev) =>
             prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
           )
         }
+        onSelectPath={async () => {
+          const path = await window.electron.ipcRenderer.invoke('dialog:openDirectory')
+          if (path) {
+            setDownloadPath(path)
+            localStorage.setItem('app-download-path', path)
+          }
+        }}
+        isEHentai={selectedSite.id === 'ehentai'}
       />
 
       <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
         <MediaGrid
           items={displayMedia}
           selectedIds={selectedIds}
-          isSelectionMode={isSelectionMode}
+          isSelectionMode={selectedIds.length > 0}
           onToggleItem={handleToggleItem}
           onViewItem={handleViewItem}
           onFavorite={toggleFavorite}
@@ -268,39 +148,35 @@ function App(): React.ReactElement {
 
         <Pagination
           page={page}
-          isVisible={displayMedia.length > 0 && !isInsideAlbum && !showFavorites}
+          isVisible={media.length > 0 && !nav.isInsideAlbum && !showFavorites}
           isLoading={loading}
           canNext={canNext}
-          onNext={() => {
-            executeSearch(currentTags, page + 1, true)
-            document.querySelector('main')?.scrollTo(0, 0)
-          }}
-          onPrev={() => executeSearch(currentTags, page - 1)}
+          onNext={() => search(selectedSite, currentTags, page + 1)}
+          onPrev={() => search(selectedSite, currentTags, page - 1)}
         />
       </main>
 
       {downloading && <DownloadProgress current={progress.current} total={progress.total} />}
 
-      {viewingItem && (
+      {nav.viewingItem && (
         <Lightbox
-          item={viewingItem}
-          isFavorite={isFavorite(viewingItem.id)}
-          onClose={() => setViewingItem(null)}
-          onFavorite={() => toggleFavorite(viewingItem)}
+          item={nav.viewingItem}
+          onClose={() => nav.setViewingItem(null)}
+          isFavorite={isFavorite(nav.viewingItem.id)}
+          onFavorite={() => toggleFavorite(nav.viewingItem!)}
           onNext={() => {
-            const idx = displayMedia.findIndex((m) => m.id === viewingItem.id)
+            const idx = displayMedia.findIndex((m) => m.id === nav.viewingItem!.id)
             if (idx < displayMedia.length - 1) handleViewItem(displayMedia[idx + 1])
           }}
           onPrev={() => {
-            const idx = displayMedia.findIndex((m) => m.id === viewingItem.id)
+            const idx = displayMedia.findIndex((m) => m.id === nav.viewingItem!.id)
             if (idx > 0) handleViewItem(displayMedia[idx - 1])
           }}
           onTagClick={(tag) => {
-            setIsInsideAlbum(false)
+            nav.setIsInsideAlbum(false)
             setSearchTag(tag)
-            // A busca aqui é imediata ao clicar em uma tag da lightbox
-            executeSearch(tag, 0)
-            setViewingItem(null)
+            search(selectedSite, tag, 0)
+            nav.setViewingItem(null)
           }}
           downloadPath={downloadPath}
         />
@@ -308,5 +184,3 @@ function App(): React.ReactElement {
     </div>
   )
 }
-
-export default App
