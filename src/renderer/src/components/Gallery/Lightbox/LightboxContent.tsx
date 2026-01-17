@@ -1,6 +1,14 @@
 import { useState, useRef, MouseEvent } from 'react'
 import { MediaItem } from '../../../types'
 
+// --- EXTENSÃO DE TIPOS (RESOLUÇÃO DE CONFLITO LINT/TS) ---
+declare module 'react' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface VideoHTMLAttributes<T> {
+    referrerPolicy?: React.HTMLAttributeReferrerPolicy
+  }
+}
+
 interface Props {
   item: MediaItem
   volume: number
@@ -12,27 +20,22 @@ interface Props {
 export const LightboxContent = ({ item, volume, isMuted, onVolumeChange, direction }: Props) => {
   const [isMediaLoading, setIsMediaLoading] = useState(true)
   const [isZoomed, setIsZoomed] = useState(false)
-  const [mousePos, setMousePos] = useState({ x: 50, y: 50 }) // Posição em porcentagem
+  const [mousePos, setMousePos] = useState({ x: 50, y: 50 })
   const containerRef = useRef<HTMLDivElement>(null)
 
   const slideClass = direction === 'next' ? 'slide-in-from-right' : 'slide-in-from-left'
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isZoomed || !containerRef.current) return
-
     const { left, top, width, height } = containerRef.current.getBoundingClientRect()
-
-    // Calcula a posição do mouse relativa ao container em porcentagem
     const x = ((e.clientX - left) / width) * 100
     const y = ((e.clientY - top) / height) * 100
-
     setMousePos({ x, y })
   }
 
   const toggleZoom = (e: MouseEvent) => {
     e.stopPropagation()
     setIsZoomed(!isZoomed)
-    // Se estiver saindo do zoom, centraliza novamente
     if (isZoomed) setMousePos({ x: 50, y: 50 })
   }
 
@@ -53,6 +56,7 @@ export const LightboxContent = ({ item, volume, isMuted, onVolumeChange, directi
           src={item.fileUrl}
           controls
           autoPlay
+          referrerPolicy="no-referrer"
           className={`max-w-full max-h-full rounded-lg shadow-2xl transition-opacity ${isMediaLoading ? 'opacity-0' : 'opacity-100'}`}
           onLoadedData={(e) => {
             const v = e.currentTarget
@@ -71,9 +75,9 @@ export const LightboxContent = ({ item, volume, isMuted, onVolumeChange, directi
         >
           <img
             src={item.fileUrl}
+            referrerPolicy="no-referrer"
             onLoad={() => setIsMediaLoading(false)}
             style={{
-              // O segredo está aqui: movemos o ponto de origem da transformação conforme o mouse
               transformOrigin: `${mousePos.x}% ${mousePos.y}%`,
               transform: isZoomed ? 'scale(2.5)' : 'scale(1)',
             }}

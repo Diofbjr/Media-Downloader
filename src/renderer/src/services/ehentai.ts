@@ -51,7 +51,7 @@ export const getEHentaiDirectImageUrl = async (pageUrl: string): Promise<string>
 }
 
 export const EHentaiProvider: SiteProvider = {
-  limit: 25, // Adicionado para cumprir a interface SiteProvider
+  limit: 20, // Adicionado para cumprir a interface SiteProvider
 
   search: async (tags, page = 0, options) => {
     try {
