@@ -36,7 +36,9 @@ function App(): React.ReactElement {
   )
 
   // --- ESTADOS DE DOWNLOAD ---
-  const [downloadPath, setDownloadPath] = useState<string>('')
+  const [downloadPath, setDownloadPath] = useState<string>(() => {
+    return localStorage.getItem('app-download-path') || ''
+  })
   const [downloading, setDownloading] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
 
@@ -147,23 +149,54 @@ function App(): React.ReactElement {
   const handleDownload = async () => {
     if (!downloadPath || selectedIds.length === 0) return
     setDownloading(true)
-    const itemsToDownload = displayMedia.filter((m) => selectedIds.includes(m.id))
-    setProgress({ current: 0, total: itemsToDownload.length })
 
-    for (let i = 0; i < itemsToDownload.length; i++) {
-      let item = itemsToDownload[i]
+    // 1. Identificar quais itens selecionados são álbuns e quais são mídias diretas
+    const selectedItems = displayMedia.filter((m) => selectedIds.includes(m.id))
+    const finalDownloadQueue: MediaItem[] = []
+
+    for (const item of selectedItems) {
+      const isAlbum =
+        item.fileUrl.includes('erome.com/a/') || item.fileUrl.includes('e-hentai.org/g/')
+
+      if (isAlbum) {
+        // Se for álbum, buscamos o conteúdo interno antes de baixar
+        const content = item.fileUrl.includes('erome')
+          ? await EromeProvider.getAlbumContent?.(item.fileUrl)
+          : await EHentaiProvider.getAlbumContent?.(item.fileUrl)
+
+        if (content) {
+          finalDownloadQueue.push(...content)
+        }
+      } else {
+        // Se for mídia direta, vai direto para a fila
+        finalDownloadQueue.push(item)
+      }
+    }
+
+    // 2. Executar o download da fila final acumulada
+    setProgress({ current: 0, total: finalDownloadQueue.length })
+
+    for (let i = 0; i < finalDownloadQueue.length; i++) {
+      let item = finalDownloadQueue[i]
+
+      // Resolução de links do E-Hentai se necessário
       if (item.fileUrl.includes('e-hentai.org/s/')) {
         const direct = await getEHentaiDirectImageUrl(item.fileUrl)
         item = { ...item, fileUrl: direct || item.fileUrl }
       }
+
       const ext = item.fileUrl.split('.').pop()?.split('?')[0] || 'jpg'
+
       await window.electron.ipcRenderer.invoke('download:file', {
         url: item.fileUrl,
         destPath: downloadPath,
+        // Dica: Para álbuns, talvez você queira criar uma subpasta aqui futuramente
         fileName: `${item.id.replace(/[^a-z0-9]/gi, '_')}.${ext}`,
       })
+
       setProgress((p) => ({ ...p, current: i + 1 }))
     }
+
     setDownloading(false)
     setSelectedIds([])
   }
@@ -206,8 +239,13 @@ function App(): React.ReactElement {
         setSearchTag={setSearchTag}
         onSearch={() => executeSearch(searchTag, 0)}
         onSelectPath={async () => {
+          // Chama o Electron para abrir o seletor de pastas
           const path = await window.electron.ipcRenderer.invoke('dialog:openDirectory')
-          if (path) setDownloadPath(path)
+          if (path) {
+            setDownloadPath(path)
+            // SALVA O CAMINHO: Garante que ao reabrir o app a pasta esteja lá
+            localStorage.setItem('app-download-path', path)
+          }
         }}
         onDownload={handleDownload}
         onToggleCategory={(cat) =>

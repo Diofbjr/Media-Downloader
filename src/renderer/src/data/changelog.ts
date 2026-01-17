@@ -7,6 +7,19 @@ export interface Version {
 
 export const changelogData: Version[] = [
   {
+    version: '1.0.6',
+    date: '2026-01-17',
+    type: 'patch',
+    changes: [
+      'Implementação de download recursivo de álbuns: Agora o app identifica álbuns do Erome e E-Hentai e baixa todas as mídias internas automaticamente.',
+      'Novo Modal de Atualização com barra de progresso em tempo real e notas de lançamento.',
+      'Persistência do diretório de download: O caminho selecionado agora é salvo permanentemente no armazenamento local.',
+      'Ajuste nos cabeçalhos de requisição (Referer/Origin) para contornar bloqueios de download em servidores de mídia.',
+      'Padronização da comunicação IPC entre Processo Principal e Renderizador para maior estabilidade.',
+      'Melhoria na fila de download: Os itens agora são processados sequencialmente para evitar sobrecarga de rede.',
+    ],
+  },
+  {
     version: '1.0.5',
     date: '2026-01-16',
     type: 'patch',

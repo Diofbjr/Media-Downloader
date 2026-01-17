@@ -7,12 +7,12 @@ import axios from 'axios'
 import fs from 'fs'
 import path from 'path'
 
-// --- NOVO: CAMINHO DO ARQUIVO DE FAVORITOS ---
+// --- CONFIGURAÇÕES DE CAMINHOS ---
 const FAVORITES_PATH = path.join(app.getPath('userData'), 'favorites.json')
 
-// Configuração do updater
+// --- CONFIGURAÇÃO DO UPDATER ---
 autoUpdater.logger = console
-autoUpdater.autoDownload = false
+autoUpdater.autoDownload = false // Permitir que o usuário clique no botão para baixar
 autoUpdater.allowPrerelease = true
 
 let mainWindow: BrowserWindow
@@ -27,15 +27,30 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      webSecurity: false,
+      webSecurity: false, // Necessário para carregar mídias de domínios externos
     },
   })
 
-  // ... (Sua lógica de autoUpdater permanece idêntica aqui)
+  // --- EVENTOS DO AUTO-UPDATER PARA O RENDERER ---
+  autoUpdater.on('update-available', (info) => {
+    mainWindow.webContents.send('update-available', info)
+  })
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    mainWindow.webContents.send('download-progress', progressObj.percent)
+  })
+
+  autoUpdater.on('update-downloaded', () => {
+    mainWindow.webContents.send('update-downloaded')
+  })
+
+  autoUpdater.on('error', (err) => {
+    console.error('Erro no Auto-Updater:', err)
+  })
 
   Menu.setApplicationMenu(null)
 
-  // Cookies E-Hentai
+  // --- CONFIGURAÇÃO DE PRIVACIDADE E BYPASS (COOKIES/CORS) ---
   session.defaultSession.cookies.set({
     url: 'https://e-hentai.org',
     name: 'uh',
@@ -45,7 +60,6 @@ function createWindow(): void {
     expirationDate: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
   })
 
-  // Bypass de CORS e CSP
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = { ...details.responseHeaders }
     delete responseHeaders['content-security-policy']
@@ -61,7 +75,6 @@ function createWindow(): void {
     callback({ cancel: false, responseHeaders })
   })
 
-  // Gerenciamento de Referer e User-Agent
   session.defaultSession.webRequest.onBeforeSendHeaders(
     { urls: ['*://*/*'] },
     (details, callback) => {
@@ -109,16 +122,16 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // --- Handlers do IPC para o Updater ---
-  ipcMain.on('start_download', () => {
+  // --- HANDLERS DO IPC PARA O UPDATER ---
+  ipcMain.on('start-download', () => {
     autoUpdater.downloadUpdate()
   })
 
-  ipcMain.on('restart_app', () => {
+  ipcMain.on('restart-app', () => {
     autoUpdater.quitAndInstall()
   })
 
-  // --- Handlers de Sistema ---
+  // --- HANDLERS DE SISTEMA (DIÁLOGOS) ---
   ipcMain.handle('dialog:openDirectory', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openDirectory', 'createDirectory'],
@@ -127,7 +140,7 @@ app.whenReady().then(() => {
     return canceled ? null : filePaths[0]
   })
 
-  // --- NOVO: HANDLERS DE FAVORITOS ---
+  // --- HANDLERS DE FAVORITOS ---
   ipcMain.handle('favorites:load', () => {
     if (!fs.existsSync(FAVORITES_PATH)) return []
     try {
@@ -147,7 +160,7 @@ app.whenReady().then(() => {
     }
   })
 
-  // --- Handler de Download ---
+  // --- HANDLER DE DOWNLOAD DE ARQUIVOS ---
   ipcMain.handle('download:file', async (_event, { url, destPath, fileName }) => {
     try {
       let referer = 'https://www.google.com/'
